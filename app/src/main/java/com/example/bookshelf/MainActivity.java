@@ -16,11 +16,14 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.SeekBar;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.w3c.dom.Text;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -29,12 +32,15 @@ import java.util.ArrayList;
 
 import edu.temple.audiobookplayer.AudiobookService;
 
-public class MainActivity extends AppCompatActivity implements BookListFragment.BookListFragmentInterface, BookPagerFragment.BookPagerInterface {
+public class MainActivity extends AppCompatActivity implements BookListFragment.BookListFragmentInterface, BookPagerFragment.BookPagerInterface, BookTitleFragment.BookTitleInterface {
     static ArrayList<Book> bookCollection = new ArrayList<>();
     static int currentDisplayedBook = 0;
     private JSONArray bookJSON;
     private String apiURL = "https://kamorris.com/lab/audlib/booksearch.php";
     private String apiURLs = "https://kamorris.com/lab/audlib/booksearch.php?search=";
+    private int currentProgress;
+    private String currentBook;
+    private int currentBookId;
 
     Handler getBookHandler = new Handler(new Handler.Callback() {
         @Override
@@ -86,10 +92,21 @@ public class MainActivity extends AppCompatActivity implements BookListFragment.
         }
     });
 
+    Handler getAudioProgress = new Handler(msg -> {
+        AudiobookService.BookProgress obj = (AudiobookService.BookProgress) msg.obj;
+        SeekBar seekBar = findViewById(R.id.seekBar);
+        if (obj != null) {
+            seekBar.setProgress(obj.getProgress());
+            currentProgress = obj.getProgress();
+        }
+        return false;
+    });
+
     private ServiceConnection mServiceConnection = new ServiceConnection() {
         @Override
         public void onServiceConnected(ComponentName name, IBinder service) {
             binder = (AudiobookService.MediaControlBinder) service;
+            binder.setProgressHandler(getAudioProgress);
             mServiceBound = true;
         }
 
@@ -205,6 +222,32 @@ public class MainActivity extends AppCompatActivity implements BookListFragment.
             }
         });
 
+        Button pauseButton = findViewById(R.id.pauseButton);
+        pauseButton.setOnClickListener((v -> {
+            if (binder.isPlaying()) {
+                binder.pause();
+                TextView statusTextView = findViewById(R.id.statusTextView);
+                statusTextView.setText(currentBook + " paused");
+                pauseButton.setText("RESUME");
+            } else if (!currentBook.isEmpty()){
+                binder.play(currentBookId, currentProgress);
+                TextView statusTextView = findViewById(R.id.statusTextView);
+                statusTextView.setText(currentBook + " playing");
+                pauseButton.setText("PAUSE");
+
+            }
+        }));
+
+        Button stopButton = findViewById(R.id.stopButton);
+        stopButton.setOnClickListener((v -> {
+            binder.stop();
+            currentBook = "";
+            TextView statusTextView = findViewById(R.id.statusTextView);
+            statusTextView.setText("");
+            SeekBar seekBar = findViewById(R.id.seekBar);
+            seekBar.setProgress(0);
+        }));
+
     }
 
     public void initializeBook(JSONArray js){
@@ -252,6 +295,16 @@ public class MainActivity extends AppCompatActivity implements BookListFragment.
     @Override
     public void onPageSelect(int position) {
         currentDisplayedBook = position;
-        binder.play(bookCollection.get(position).id);
+    }
+
+    @Override
+    public void playBook(int id, String bookTitle) {
+        if (mServiceBound){
+            binder.play(id);
+        }
+        currentBookId = id;
+        currentBook = bookTitle;
+        TextView statusTextView = findViewById(R.id.statusTextView);
+        statusTextView.setText(currentBook + " playing");
     }
 }

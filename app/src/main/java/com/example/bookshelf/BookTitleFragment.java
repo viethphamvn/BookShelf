@@ -1,5 +1,6 @@
 package com.example.bookshelf;
 
+import android.content.Context;
 import android.os.Bundle;
 
 import androidx.fragment.app.Fragment;
@@ -8,6 +9,7 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
 
@@ -20,8 +22,7 @@ public class BookTitleFragment extends Fragment {
 
     // TODO: Rename and change types of parameters
     private Book theBook;
-
-//    private OnFragmentInteractionListener mListener;
+    private BookTitleInterface parentFragment;
 
     public BookTitleFragment() {
         // Required empty public constructor
@@ -44,6 +45,17 @@ public class BookTitleFragment extends Fragment {
     }
 
     @Override
+    public void onAttach(Context context) {
+        super.onAttach(context);
+        if (context instanceof BookTitleInterface) {
+            parentFragment = (BookTitleInterface) context;
+        } else {
+            throw new RuntimeException(context.toString()
+                    + " must implement OnFragmentInteractionListener");
+        }
+    }
+
+    @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
         // Inflate the layout for this fragment
@@ -57,7 +69,13 @@ public class BookTitleFragment extends Fragment {
         publishedView.setText("Published on: " + theBook.published);
         Picasso.get().load(theBook.coverURL).into((ImageView)v.findViewById(R.id.coverView));
 
+        Button playButton = v.findViewById(R.id.playButton);
+        playButton.setOnClickListener(v1 -> parentFragment.playBook(theBook.id, theBook.title));
         return v;
+    }
+
+    public interface BookTitleInterface{
+        void playBook(int id, String bookTitle);
     }
 
 }

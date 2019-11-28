@@ -11,6 +11,7 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 
 import com.example.bookshelf.Book;
 
@@ -85,6 +86,7 @@ public class BookPagerFragment extends Fragment {
 
             @Override
             public void onPageSelected(int position) {
+                currentItem = position;
                 parentFragment.onPageSelect(position);
                 Log.v("real",String.valueOf(position));
             }
