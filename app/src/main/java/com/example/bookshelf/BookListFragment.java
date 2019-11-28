@@ -53,16 +53,8 @@ public class BookListFragment extends Fragment {
         View v = inflater.inflate(R.layout.fragment_book_list, container, false);
         ListView listView = v.findViewById(R.id.listView);
 
-        ListAdapter listAdapter = new ListAdapter(getActivity(), bookCollection); //right here
-
+        ArrayAdapter listAdapter = new ArrayAdapter(bookCollection, getActivity());
         listView.setAdapter(listAdapter);
-        listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-            @Override
-            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                parentFragment.onBookSelected(position, bookCollection);
-            }
-        });
-
         return v;
     }
 

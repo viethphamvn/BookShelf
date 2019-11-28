@@ -70,12 +70,12 @@ public class BookTitleFragment extends Fragment {
         Picasso.get().load(theBook.coverURL).into((ImageView)v.findViewById(R.id.coverView));
 
         Button playButton = v.findViewById(R.id.playButton);
-        playButton.setOnClickListener(v1 -> parentFragment.playBook(theBook.id, theBook.title));
+        playButton.setOnClickListener(v1 -> parentFragment.playBook(theBook));
         return v;
     }
 
     public interface BookTitleInterface{
-        void playBook(int id, String bookTitle);
+        void playBook(Book book);
     }
 
 }

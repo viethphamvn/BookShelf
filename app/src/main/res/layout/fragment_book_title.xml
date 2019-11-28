@@ -16,9 +16,9 @@
 
     <TextView
         android:id="@+id/authorView"
-        android:layout_width="405dp"
+        android:layout_width="match_parent"
         android:layout_height="35dp"
-        android:layout_marginTop="14dp"
+        android:layout_marginTop="15dp"
         android:textSize="18sp"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/titleView" />
@@ -35,7 +35,7 @@
     <ImageView
         android:id="@+id/coverView"
         android:layout_width="236dp"
-        android:layout_height="200dp"
+        android:layout_height="180dp"
         android:layout_marginStart="84dp"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/publishedView"
@@ -45,8 +45,8 @@
         android:id="@+id/playButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="160dp"
-        android:layout_marginTop="20dp"
+        android:layout_marginStart="154dp"
+        android:layout_marginTop="26dp"
         android:text="PLAY"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/coverView" />

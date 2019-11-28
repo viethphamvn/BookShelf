@@ -1,6 +1,7 @@
 package com.example.bookshelf;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.ComponentName;
@@ -32,15 +33,15 @@ import java.util.ArrayList;
 
 import edu.temple.audiobookplayer.AudiobookService;
 
-public class MainActivity extends AppCompatActivity implements BookListFragment.BookListFragmentInterface, BookPagerFragment.BookPagerInterface, BookTitleFragment.BookTitleInterface {
+public class MainActivity extends AppCompatActivity implements BookListFragment.BookListFragmentInterface, BookPagerFragment.BookPagerInterface, BookTitleFragment.BookTitleInterface, ArrayAdapter.ArrayAdapterInterface {
     static ArrayList<Book> bookCollection = new ArrayList<>();
     static int currentDisplayedBook = 0;
     private JSONArray bookJSON;
     private String apiURL = "https://kamorris.com/lab/audlib/booksearch.php";
     private String apiURLs = "https://kamorris.com/lab/audlib/booksearch.php?search=";
     private int currentProgress;
-    private String currentBook;
-    private int currentBookId;
+    private Book playingBook;
+    private String currentStatus;
 
     Handler getBookHandler = new Handler(new Handler.Callback() {
         @Override
@@ -128,6 +129,27 @@ public class MainActivity extends AppCompatActivity implements BookListFragment.
     }
 
     @Override
+    public void onRestoreInstanceState(Bundle savedInstanceState) {
+        super.onRestoreInstanceState(savedInstanceState);
+        // Restore UI state from the savedInstanceState.
+        // This bundle has also been passed to onCreate.
+        currentStatus = savedInstanceState.getString("statusView");
+        playingBook = (Book)savedInstanceState.getSerializable("book");
+        SeekBar seekBar = findViewById(R.id.seekBar);
+        seekBar.setMax(playingBook.duration);
+        TextView status = findViewById(R.id.statusTextView);
+        status.setText(currentStatus);
+    }
+
+    @Override
+    public void onSaveInstanceState(Bundle savedInstanceState) {
+        super.onSaveInstanceState(savedInstanceState);
+        savedInstanceState.putString("statusView", currentStatus);
+        savedInstanceState.putSerializable("book", playingBook);
+    }
+
+
+    @Override
     protected void onStop() {
         super.onStop();
         if (mServiceBound){
@@ -154,6 +176,7 @@ public class MainActivity extends AppCompatActivity implements BookListFragment.
                 getSupportFragmentManager().beginTransaction()
                         .remove(fragment1)
                         .commit();
+
             }
             getSupportFragmentManager().beginTransaction()
                     .add(R.id.pagerContainer, BookPagerFragment.newInstance(bookCol, currentDisplayedBook), "bookPagerFragment")
@@ -175,7 +198,6 @@ public class MainActivity extends AppCompatActivity implements BookListFragment.
                     .commit();
             onBookSelected(currentDisplayedBook, bookCol);
         }
-
 
 
         Button searchButton = findViewById(R.id.searchButton);
@@ -227,12 +249,14 @@ public class MainActivity extends AppCompatActivity implements BookListFragment.
             if (binder.isPlaying()) {
                 binder.pause();
                 TextView statusTextView = findViewById(R.id.statusTextView);
-                statusTextView.setText(currentBook + " paused");
+                statusTextView.setText(playingBook.title + " paused");
+                currentStatus = statusTextView.getText().toString();
                 pauseButton.setText("RESUME");
-            } else if (!currentBook.isEmpty()){
-                binder.play(currentBookId, currentProgress);
+            } else if (playingBook != null){
+                binder.play(playingBook.id, currentProgress);
                 TextView statusTextView = findViewById(R.id.statusTextView);
-                statusTextView.setText(currentBook + " playing");
+                statusTextView.setText(playingBook.title + " playing");
+                currentStatus = statusTextView.getText().toString();
                 pauseButton.setText("PAUSE");
 
             }
@@ -241,13 +265,32 @@ public class MainActivity extends AppCompatActivity implements BookListFragment.
         Button stopButton = findViewById(R.id.stopButton);
         stopButton.setOnClickListener((v -> {
             binder.stop();
-            currentBook = "";
+            playingBook = null;
             TextView statusTextView = findViewById(R.id.statusTextView);
             statusTextView.setText("");
+            currentStatus = statusTextView.getText().toString();
             SeekBar seekBar = findViewById(R.id.seekBar);
             seekBar.setProgress(0);
         }));
 
+        SeekBar seekBar = findViewById(R.id.seekBar);
+        seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                if (fromUser)
+                    binder.seekTo(progress);
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+
+            }
+        });
     }
 
     public void initializeBook(JSONArray js){
@@ -266,7 +309,8 @@ public class MainActivity extends AppCompatActivity implements BookListFragment.
                         e.getString("title"),
                         e.getString("author"),
                         e.getInt("published"),
-                        e.getString("cover_url")
+                        e.getString("cover_url"),
+                        e.getInt("duration")
                 );
                 bookCollection.add(b);
             } catch (JSONException ex) {
@@ -298,13 +342,15 @@ public class MainActivity extends AppCompatActivity implements BookListFragment.
     }
 
     @Override
-    public void playBook(int id, String bookTitle) {
+    public void playBook(Book book) {
+        playingBook = book;
         if (mServiceBound){
-            binder.play(id);
+            binder.play(playingBook.id);
         }
-        currentBookId = id;
-        currentBook = bookTitle;
         TextView statusTextView = findViewById(R.id.statusTextView);
-        statusTextView.setText(currentBook + " playing");
+        statusTextView.setText(playingBook.title + " playing");
+        currentStatus = statusTextView.getText().toString();
+        SeekBar seekBar = findViewById(R.id.seekBar);
+        seekBar.setMax(playingBook.duration);
     }
 }

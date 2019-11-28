@@ -7,14 +7,16 @@ public class Book implements Serializable {
     String title;
     String author;
     int published;
+    int duration;
     String coverURL;
 
-    public Book(int id, String title, String author, int published, String coverURL){
+    public Book(int id, String title, String author, int published, String coverURL, int duration){
         this.id = id;
         this.author = author;
         this.title = title;
         this.published = published;
         this.coverURL = coverURL;
+        this.duration = duration;
     }
 
     public Book(Book theBook){
@@ -23,5 +25,6 @@ public class Book implements Serializable {
         this.title = theBook.title;
         this.published = theBook.published;
         this.coverURL = theBook.coverURL;
+        this.duration = theBook.duration;
     }
 }
