@@ -1,6 +1,7 @@
 package com.example.bookshelf;
 
 import android.content.Context;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -50,6 +51,7 @@ public class ArrayAdapter extends BaseAdapter implements ListAdapter {
         playButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                Log.v("played", String.valueOf(bookCollection.get(position).id));
                 ((MainActivity)context).playBook(bookCollection.get(position));
                 ((MainActivity)context).onBookSelected(position, bookCollection);
             }
