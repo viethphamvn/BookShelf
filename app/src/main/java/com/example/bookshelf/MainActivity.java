@@ -135,8 +135,10 @@ public class MainActivity extends AppCompatActivity implements BookListFragment.
         // This bundle has also been passed to onCreate.
         currentStatus = savedInstanceState.getString("statusView");
         playingBook = (Book)savedInstanceState.getSerializable("book");
-        SeekBar seekBar = findViewById(R.id.seekBar);
-        seekBar.setMax(playingBook.duration);
+        if (playingBook != null) {
+            SeekBar seekBar = findViewById(R.id.seekBar);
+            seekBar.setMax(playingBook.duration);
+        }
         TextView status = findViewById(R.id.statusTextView);
         status.setText(currentStatus);
     }
