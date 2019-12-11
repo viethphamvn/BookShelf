@@ -88,7 +88,6 @@ public class BookPagerFragment extends Fragment {
             public void onPageSelected(int position) {
                 currentItem = position;
                 parentFragment.onPageSelect(position);
-                Log.v("real",String.valueOf(position));
             }
 
             @Override

@@ -5,6 +5,7 @@ import android.os.Bundle;
 
 import androidx.fragment.app.Fragment;
 
+import android.os.Environment;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -15,6 +16,8 @@ import android.widget.TextView;
 
 import com.example.bookshelf.Book;
 import com.squareup.picasso.Picasso;
+
+import java.io.File;
 
 public class BookTitleFragment extends Fragment {
     // TODO: Rename parameter arguments, choose names that match
@@ -74,6 +77,7 @@ public class BookTitleFragment extends Fragment {
             Log.v("played", String.valueOf(theBook.id));
             parentFragment.playBook(theBook);
         });
+
         return v;
     }
 

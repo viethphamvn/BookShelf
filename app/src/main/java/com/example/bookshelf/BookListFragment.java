@@ -53,8 +53,10 @@ public class BookListFragment extends Fragment {
         View v = inflater.inflate(R.layout.fragment_book_list, container, false);
         ListView listView = v.findViewById(R.id.listView);
 
-        ArrayAdapter listAdapter = new ArrayAdapter(bookCollection, getActivity());
+        //ArrayAdapter listAdapter = new ArrayAdapter(bookCollection, getActivity());
+        ListAdapter listAdapter = new ListAdapter(getActivity(), bookCollection);
         listView.setAdapter(listAdapter);
+        listView.setOnItemClickListener((parent, view, position, id) -> parentFragment.onBookSelected(position, bookCollection.get(position)));
         return v;
     }
 
@@ -75,6 +77,6 @@ public class BookListFragment extends Fragment {
 
     public interface BookListFragmentInterface {
         // TODO: Update argument type and name
-        void onBookSelected(int position, ArrayList<Book> bookCol);
+        void onBookSelected(int position, Book theBook);
     }
 }
