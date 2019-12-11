@@ -1,14 +1,20 @@
 package com.example.bookshelf;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
 
+import android.Manifest;
+import android.app.DownloadManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.pm.PackageManager;
+import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
@@ -24,16 +30,18 @@ import android.widget.Toast;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.w3c.dom.Text;
-
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URL;
 import java.util.ArrayList;
 
 import edu.temple.audiobookplayer.AudiobookService;
 
-public class MainActivity extends AppCompatActivity implements BookListFragment.BookListFragmentInterface, BookPagerFragment.BookPagerInterface, BookTitleFragment.BookTitleInterface, ArrayAdapter.ArrayAdapterInterface {
+public class MainActivity extends AppCompatActivity implements BookListFragment.BookListFragmentInterface, BookPagerFragment.BookPagerInterface, BookTitleFragment.BookTitleInterface, BookDetailFragment.BookDetailInterface {
     static ArrayList<Book> bookCollection = new ArrayList<>();
     static int currentDisplayedBook = 0;
     private JSONArray bookJSON;
@@ -42,6 +50,7 @@ public class MainActivity extends AppCompatActivity implements BookListFragment.
     private int currentProgress;
     private Book playingBook;
     private String currentStatus;
+    private DownloadManager downloadManager;
 
     Handler getBookHandler = new Handler(new Handler.Callback() {
         @Override
@@ -88,6 +97,7 @@ public class MainActivity extends AppCompatActivity implements BookListFragment.
                                 .commit();
                     }
                 }
+                checkFile();
             }
             return false;
         }
@@ -135,6 +145,8 @@ public class MainActivity extends AppCompatActivity implements BookListFragment.
         // This bundle has also been passed to onCreate.
         currentStatus = savedInstanceState.getString("statusView");
         playingBook = (Book)savedInstanceState.getSerializable("book");
+        currentDisplayedBook = savedInstanceState.getInt("currentDisplayedBook");
+        bookCollection = (ArrayList<Book>)savedInstanceState.getSerializable("bookCollection");
         if (playingBook != null) {
             SeekBar seekBar = findViewById(R.id.seekBar);
             seekBar.setMax(playingBook.duration);
@@ -148,6 +160,8 @@ public class MainActivity extends AppCompatActivity implements BookListFragment.
         super.onSaveInstanceState(savedInstanceState);
         savedInstanceState.putString("statusView", currentStatus);
         savedInstanceState.putSerializable("book", playingBook);
+        savedInstanceState.putSerializable("bookCollection",bookCollection);
+        savedInstanceState.putInt("currentDisplayedBook",currentDisplayedBook);
     }
 
 
@@ -160,10 +174,27 @@ public class MainActivity extends AppCompatActivity implements BookListFragment.
         }
     }
 
+    private static final int REQUEST_EXTERNAL_STORAGE = 1;
+    private static String[] PERMISSIONS_STORAGE = {
+            Manifest.permission.READ_EXTERNAL_STORAGE,
+            Manifest.permission.WRITE_EXTERNAL_STORAGE
+    };
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        int permission = ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE);
+
+        if (permission != PackageManager.PERMISSION_GRANTED) {
+            // We don't have permission so prompt the user
+            ActivityCompat.requestPermissions(
+                    MainActivity.this,
+                    PERMISSIONS_STORAGE,
+                    REQUEST_EXTERNAL_STORAGE
+            );
+        }
 
         ArrayList<Book> bookCol = new ArrayList<>();
 
@@ -172,6 +203,9 @@ public class MainActivity extends AppCompatActivity implements BookListFragment.
             BookListFragment fragment = (BookListFragment) getSupportFragmentManager().findFragmentByTag("bookListFragment");
             if (fragment != null) {
                 bookCol = fragment.getBook();
+                if (bookCol.isEmpty() && !bookCollection.isEmpty()){
+                    bookCol = bookCollection;
+                }
             }
             BookPagerFragment fragment1 = (BookPagerFragment) getSupportFragmentManager().findFragmentByTag("bookPagerFragment");
             if (fragment1 != null) {
@@ -183,10 +217,14 @@ public class MainActivity extends AppCompatActivity implements BookListFragment.
             getSupportFragmentManager().beginTransaction()
                     .add(R.id.pagerContainer, BookPagerFragment.newInstance(bookCol, currentDisplayedBook), "bookPagerFragment")
                     .commit();
+            checkFile();
         } else { //if landscape
             BookPagerFragment fragment = (BookPagerFragment) getSupportFragmentManager().findFragmentByTag("bookPagerFragment");
             if (fragment != null) {
                 bookCol = fragment.getBook();
+                if (bookCol.isEmpty() && !bookCollection.isEmpty()){
+                    bookCol = bookCollection;
+                }
             }
             BookListFragment fragment1 = (BookListFragment) getSupportFragmentManager().findFragmentByTag("bookListFragment");
             //TODO: This will be NULL --> Fix
@@ -198,81 +236,108 @@ public class MainActivity extends AppCompatActivity implements BookListFragment.
             getSupportFragmentManager().beginTransaction()
                     .add(R.id.fragmentContainer, BookListFragment.newInstance(bookCol), "bookListFragment")
                     .commit();
-            onBookSelected(currentDisplayedBook, bookCol);
+            if (!bookCollection.isEmpty()) {
+                onBookSelected(currentDisplayedBook, bookCollection.get(currentDisplayedBook));
+            }
         }
 
 
         Button searchButton = findViewById(R.id.searchButton);
-        searchButton.setOnClickListener(new View.OnClickListener() {
+        searchButton.setOnClickListener(v -> new Thread() {
             @Override
-            public void onClick(View v) {
-                new Thread() {
-                    @Override
-                    public void run() {
-                        try {
-                            URL url;
-                            EditText searchBox = findViewById(R.id.searchBox);
-                            if (searchBox.getText().toString().isEmpty()){
-                                url = new URL(apiURL);
-                            } else {
-                                StringBuilder sb = new StringBuilder();
-                                sb.append(apiURLs);
-                                sb.append(searchBox.getText().toString());
-                                url = new URL(sb.toString());
-                            }
-                            BufferedReader reader = new BufferedReader(
-                                    new InputStreamReader(
-                                            url.openStream()));
-
-                            StringBuilder response = new StringBuilder();
-                            String tmpResponse;
-
-                            while ((tmpResponse = reader.readLine()) != null) {
-                                response.append(tmpResponse);
-                            }
-
-                            Message msg = Message.obtain();
-
-                            msg.obj = response.toString();
-
-                            Log.d("Books RECEIVED", response.toString());
-
-                            getBookHandler.sendMessage(msg);
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
+            public void run() {
+                try {
+                    URL url;
+                    EditText searchBox = findViewById(R.id.searchBox);
+                    if (searchBox.getText().toString().isEmpty()){
+                        url = new URL(apiURL);
+                    } else {
+                        StringBuilder sb = new StringBuilder();
+                        sb.append(apiURLs);
+                        sb.append(searchBox.getText().toString());
+                        url = new URL(sb.toString());
                     }
-                }.start();
-            }
-        });
+                    BufferedReader reader = new BufferedReader(
+                            new InputStreamReader(
+                                    url.openStream()));
 
+                    StringBuilder response = new StringBuilder();
+                    String tmpResponse;
+
+                    while ((tmpResponse = reader.readLine()) != null) {
+                        response.append(tmpResponse);
+                    }
+
+                    Message msg = Message.obtain();
+
+                    msg.obj = response.toString();
+
+                    Log.d("Books RECEIVED", response.toString());
+
+                    getBookHandler.sendMessage(msg);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }.start());
+
+        //PAUSE BUTTON HANDLER
         Button pauseButton = findViewById(R.id.pauseButton);
         pauseButton.setOnClickListener((v -> {
+            int savedProgress;
+            if (currentProgress <= 10){
+                savedProgress = 0;
+            } else {
+                savedProgress = currentProgress - 10;
+            }
             if (binder.isPlaying()) {
-                binder.pause();
+                try {
+                    //Save progress to storage
+                    File root = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "BookShelfData");
+                    if (!root.exists()) {
+                        root.mkdirs();
+                    }
+                    File file = new File(root, "book" + playingBook.id + ".txt");
+                    FileWriter writer = new FileWriter(file);
+                    writer.append(String.valueOf(savedProgress));
+                    writer.flush();
+                    writer.close();
+                    Toast.makeText(this, "Saved", Toast.LENGTH_SHORT).show();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                binder.stop();
                 TextView statusTextView = findViewById(R.id.statusTextView);
                 statusTextView.setText(playingBook.title + " paused");
                 currentStatus = statusTextView.getText().toString();
-                pauseButton.setText("RESUME");
-            } else if (playingBook != null){
-                binder.play(playingBook.id, currentProgress);
-                TextView statusTextView = findViewById(R.id.statusTextView);
-                statusTextView.setText(playingBook.title + " playing");
-                currentStatus = statusTextView.getText().toString();
-                pauseButton.setText("PAUSE");
-
             }
+//            } else if (playingBook != null){
+//                playBook(playingBook);
+//                TextView statusTextView = findViewById(R.id.statusTextView);
+//                statusTextView.setText(playingBook.title + " playing");
+//                currentStatus = statusTextView.getText().toString();
+//                pauseButton.setText("PAUSE");
+//
+//            }
         }));
-
+        //STOP BUTTON HANDLER
         Button stopButton = findViewById(R.id.stopButton);
         stopButton.setOnClickListener((v -> {
-            binder.stop();
-            playingBook = null;
-            TextView statusTextView = findViewById(R.id.statusTextView);
-            statusTextView.setText("");
-            currentStatus = statusTextView.getText().toString();
-            SeekBar seekBar = findViewById(R.id.seekBar);
-            seekBar.setProgress(0);
+            //Delete progress file from storage
+            if (playingBook != null) {
+                String fpath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/BookShelfData/" + "book" + playingBook.id + ".txt";
+                File file = new File(fpath);
+                if (file.exists()) {
+                    file.delete();
+                }
+                binder.stop();
+                playingBook = null;
+                TextView statusTextView = findViewById(R.id.statusTextView);
+                statusTextView.setText("");
+                currentStatus = statusTextView.getText().toString();
+                SeekBar seekBar = findViewById(R.id.seekBar);
+                seekBar.setProgress(0);
+            }
         }));
 
         SeekBar seekBar = findViewById(R.id.seekBar);
@@ -291,6 +356,20 @@ public class MainActivity extends AppCompatActivity implements BookListFragment.
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
 
+            }
+        });
+
+        Button downloadButton = findViewById(R.id.downloadButton);
+        downloadButton.setOnClickListener(v -> {
+            if (!bookCollection.isEmpty()) {
+                downloadThis(bookCollection.get(currentDisplayedBook));
+            }
+        });
+
+        Button deleteButton = findViewById(R.id.deleteButton);
+        deleteButton.setOnClickListener(v -> {
+            if (currentDisplayedBook < bookCollection.size()) {
+                deleteThis(bookCollection.get(currentDisplayedBook));
             }
         });
     }
@@ -319,40 +398,178 @@ public class MainActivity extends AppCompatActivity implements BookListFragment.
                 ex.printStackTrace();
             }
         }
+        currentDisplayedBook = 0;
+        checkFile();
     }
 
     @Override
-    public void onBookSelected(int position, ArrayList<Book> bookCol) {
+    public void onBookSelected(int position, Book theBook) {
         currentDisplayedBook = position;
+        Log.v("position",String.valueOf(theBook.id));
         BookDetailFragment fragment = (BookDetailFragment) getSupportFragmentManager().findFragmentByTag("bookDetailFragment");
         if (fragment != null) {
             getSupportFragmentManager().beginTransaction()
                     .remove(fragment)
                     .commit();
         }
-        if (position < bookCol.size()) {
-            getSupportFragmentManager()
-                    .beginTransaction()
-                    .replace(R.id.detailContainer, BookDetailFragment.newInstance(bookCol.get(position)), "bookDetailFragment")
-                    .commit();
-        }
+        getSupportFragmentManager()
+            .beginTransaction()
+            .replace(R.id.detailContainer, BookDetailFragment.newInstance(theBook), "bookDetailFragment")
+            .commit();
+        checkFile();
     }
 
     @Override
     public void onPageSelect(int position) {
         currentDisplayedBook = position;
+        checkFile();
+    }
+
+    public void checkFile(){
+        Log.v("test",currentDisplayedBook + " " + bookCollection.size());
+        if (currentDisplayedBook < bookCollection.size()) {
+            Log.v("position","from checkfile"+bookCollection.get(currentDisplayedBook).id);
+            String fpath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/book" + bookCollection.get(currentDisplayedBook).id + ".mp3";
+            File file = new File(fpath);
+            if (file.isFile()) {
+                Log.v("file","find found");
+                Button downloadButton = findViewById(R.id.downloadButton);
+                downloadButton.setVisibility(View.INVISIBLE);
+                Button deleteButton = findViewById(R.id.deleteButton);
+                deleteButton.setVisibility(View.VISIBLE);
+            } else {
+                Button downloadButton = findViewById(R.id.downloadButton);
+                downloadButton.setVisibility(View.VISIBLE);
+                Button deleteButton = findViewById(R.id.deleteButton);
+                deleteButton.setVisibility(View.INVISIBLE);
+            }
+        }
     }
 
     @Override
     public void playBook(Book book) {
-        playingBook = book;
-        if (mServiceBound){
-            binder.play(playingBook.id);
+        //Save playing book
+        if (binder.isPlaying()) {
+            try {
+                int savedProgress;
+                if (currentProgress <= 10) {
+                    savedProgress = 0;
+                } else {
+                    savedProgress = currentProgress - 10;
+                }
+                //Save progress to storage
+                File root = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "BookShelfData");
+                if (!root.exists()) {
+                    root.mkdirs();
+                }
+                File file = new File(root, "book" + playingBook.id + ".txt");
+                FileWriter writer = new FileWriter(file);
+                writer.append(String.valueOf(savedProgress));
+                writer.flush();
+                writer.close();
+                Toast.makeText(this, "Saved", Toast.LENGTH_SHORT).show();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
+        //Play the requested book
+        playingBook = book;
+        //Check if audio file exists
+        boolean audio = false;
+        String a_path = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/book" + book.id + ".mp3";
+        File a_file = new File(a_path);
+        if (a_file.exists()){
+            audio = true;
+        }
+        //check if progress file exits
+        boolean progress = false;
+        String p_path = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/BookShelfData/book" + book.id + ".txt";
+        File p_file = new File(p_path);
+        StringBuilder text = new StringBuilder();
+        if (p_file.exists()){
+            progress = true;
+            try {
+                BufferedReader br = new BufferedReader(new FileReader(p_file));
+                String line;
+                while ((line = br.readLine()) != null) {
+                    text.append(line);
+                }
+                br.close();
+            } catch (IOException e) {
+                //You'll need to add proper error handling here
+            }
+            Toast.makeText(this,"Found progress for book" + book.id,Toast.LENGTH_LONG).show();
+        }
+        //Play book
+        if (mServiceBound) {
+            //If file exist
+            if (audio) {
+                if (progress) {
+                    binder.play(a_file, Integer.valueOf(String.valueOf(text)));
+                } else {
+                    binder.play(a_file);
+                }
+                Toast.makeText(this, "PLaying from file", Toast.LENGTH_LONG).show();
+            } else {
+                binder.play(playingBook.id, 0);
+                Toast.makeText(this, "PLaying from server", Toast.LENGTH_LONG).show();
+            }
+        }
+
         TextView statusTextView = findViewById(R.id.statusTextView);
         statusTextView.setText(playingBook.title + " playing");
         currentStatus = statusTextView.getText().toString();
         SeekBar seekBar = findViewById(R.id.seekBar);
         seekBar.setMax(playingBook.duration);
+    }
+
+    public void downloadThis(Book theBook){
+        String fpath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/book" + theBook.id + ".mp3";
+        File file = new File(fpath);
+        if (!file.isFile()) {
+            new DownloadBook().execute(theBook);
+            Button downloadButton = findViewById(R.id.downloadButton);
+            downloadButton.setVisibility(View.INVISIBLE);
+            Button deleteButton = findViewById(R.id.deleteButton);
+            deleteButton.setVisibility(View.VISIBLE);
+            //Disable download and activate delete
+        }
+    }
+
+    public void deleteThis(Book theBook){
+        String fpath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/book" + bookCollection.get(currentDisplayedBook).id + ".mp3";
+        File file = new File(fpath);
+        if (file.isFile()){
+            file.delete();
+        }
+        checkFile();
+    }
+
+    private class DownloadBook extends AsyncTask<Book, String, String>{
+       @Override
+        protected String doInBackground(Book... theBook) {
+           try {
+               Log.v("download", "downloading");
+               String s_url = "https://kamorris.com/lab/audlib/download.php?id=" + theBook[0].id;
+
+               downloadManager = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+               Uri uri = Uri.parse(s_url);
+               DownloadManager.Request request = new DownloadManager.Request(uri);
+               request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+               request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS,"book"+theBook[0].id+".mp3");
+               Log.v("path",Environment.DIRECTORY_DOWNLOADS);
+               request.setMimeType("audio/mpeg");
+               downloadManager.enqueue(request);
+           } catch (Exception e){
+               Log.e("Error",e.getMessage());
+           }
+           return null;
+        }
+
+        @Override
+        protected void onPostExecute(String message) {
+            Toast.makeText(getApplicationContext(),
+                    "Download finished!", Toast.LENGTH_LONG).show();
+        }
     }
 }
